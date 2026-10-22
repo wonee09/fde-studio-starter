@@ -1,0 +1,104 @@
+// 숨 스튜디오의 기본 DB 구조
+// 수강생이 구글 시트로 설계한 구조가 있으면, 그 구조에 맞게 고친 뒤 npm run db:push 로 반영한다.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// 지점
+model Branch {
+  id          Int            @id @default(autoincrement())
+  name        String         @unique
+  address     String
+  instructors Instructor[]
+  sessions    ClassSession[]
+  members     Member[]
+
+  @@map("branches")
+}
+
+/// 강사
+model Instructor {
+  id       Int            @id @default(autoincrement())
+  name     String
+  branch   Branch         @relation(fields: [branchId], references: [id])
+  branchId Int            @map("branch_id")
+  sessions ClassSession[]
+
+  @@map("instructors")
+}
+
+/// 수업 (날짜와 시간이 정해진 한 번의 수업)
+model ClassSession {
+  id           Int        @id @default(autoincrement())
+  title        String
+  branch       Branch     @relation(fields: [branchId], references: [id])
+  branchId     Int        @map("branch_id")
+  instructor   Instructor @relation(fields: [instructorId], references: [id])
+  instructorId Int        @map("instructor_id")
+  startsAt     DateTime   @map("starts_at")
+  endsAt       DateTime   @map("ends_at")
+  capacity     Int
+  bookings     Booking[]
+
+  @@map("class_sessions")
+}
+
+/// 회원
+model Member {
+  id       Int       @id @default(autoincrement())
+  name     String
+  phone    String
+  branch   Branch    @relation(fields: [branchId], references: [id])
+  branchId Int       @map("branch_id")
+  joinedAt DateTime  @default(now()) @map("joined_at")
+  passes   Pass[]
+  bookings Booking[]
+
+  @@map("members")
+}
+
+/// 회원권
+model Pass {
+  id         Int       @id @default(autoincrement())
+  member     Member    @relation(fields: [memberId], references: [id])
+  memberId   Int       @map("member_id")
+  kind       String
+  totalCount Int       @map("total_count")
+  remaining  Int
+  price      Int
+  startsAt   DateTime  @map("starts_at")
+  expiresAt  DateTime  @map("expires_at")
+  bookings   Booking[]
+
+  @@map("passes")
+}
+
+/// 예약 상태: 확정, 취소, 노쇼
+enum BookingStatus {
+  CONFIRMED
+  CANCELED
+  NO_SHOW
+}
+
+/// 예약 (회원과 수업을 잇는 표)
+model Booking {
+  id        Int           @id @default(autoincrement())
+  member    Member        @relation(fields: [memberId], references: [id])
+  memberId  Int           @map("member_id")
+  session   ClassSession  @relation(fields: [sessionId], references: [id])
+  sessionId Int           @map("session_id")
+  pass      Pass          @relation(fields: [passId], references: [id])
+  passId    Int           @map("pass_id")
+  status    BookingStatus @default(CONFIRMED)
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  // 같은 회원이 같은 수업을 두 번 예약할 수 없다
+  @@unique([memberId, sessionId])
+  @@map("bookings")
+}
